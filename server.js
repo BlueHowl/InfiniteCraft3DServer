@@ -27,7 +27,7 @@ app.use(express.json());
 
 
 //SQLite3
-const db = new sqlite3('./data/icdb.sqlite');
+const db = new sqlite3('./icdb.sqlite');
 
 // Create a table for storing combinations
 db.transaction(() => {
