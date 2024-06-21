@@ -27,7 +27,7 @@ app.use(express.json());
 
 
 //SQLite3
-const db = new sqlite3.Database('./icdb.db', (err) => {
+const db = new sqlite3.Database('/data/icdb.db', (err) => {
   if (err) {
     console.error(err.message);
   } else {
