@@ -27,18 +27,18 @@ app.use(express.json());
 
 
 //SQLite3
-const db = new sqlite3.Database('./mydb.sqlite');
+const db = new sqlite3('./mydb.sqlite');
 
 // Create a table for storing combinations
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS combinations (
+db.transaction(() => {
+  db.exec(`CREATE TABLE IF NOT EXISTS combinations (
     str1 TEXT CHECK(length(str1) <= 100),
     str2 TEXT CHECK(length(str2) <= 100),
     cnId TEXT,
     PRIMARY KEY (str1, str2)
   )`);
-  
-  db.run(`CREATE TABLE IF NOT EXISTS craftnode (
+
+  db.exec(`CREATE TABLE IF NOT EXISTS craftnode (
     id TEXT PRIMARY KEY,
     text TEXT CHECK(length(text) <= 100),
     emoji Text CHECK(length(emoji) <= 64),
@@ -92,77 +92,61 @@ app.get('/api/text-to-voxel/:id', async (req, res) => {
 app.get('/api/check-combination', (req, res) => {
   const { str1, str2 } = req.query;
 
-  db.get('SELECT * FROM combinations WHERE (str1 = ? AND str2 = ?) OR (str1 = ? AND str2 = ?)', [str1, str2, str2, str1], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (row) {
-      db.get('SELECT * FROM craftnode WHERE id = ?', [row.cnId], (err, cnRow) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        if (cnRow) {
-          return res.json({ exists: true, result: cnRow });
-        } else {
-          return res.json({ exists: false });
-        }
-      });
+  const stmt = db.prepare('SELECT * FROM combinations WHERE (str1 = ? AND str2 = ?) OR (str1 = ? AND str2 = ?)');
+  const row = stmt.get([str1, str2, str2, str1]);
+
+  if (row) {
+    const craftnodeStmt = db.prepare('SELECT * FROM craftnode WHERE id = ?');
+    const cnRow = craftnodeStmt.get([row.cnId]);
+
+    if (cnRow) {
+      return res.json({ exists: true, result: cnRow });
     } else {
       return res.json({ exists: false });
     }
-  });
+  } else {
+    return res.json({ exists: false });
+  }
 });
+
 
 // API endpoint to check if a craftnode with the same string result exists
 app.get('/api/check-craftnode', (req, res) => {
   const { text } = req.query;
 
-  db.get('SELECT * FROM craftnode WHERE text = ?', [text], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (row) {
-      return res.json({ exists: true, result: row });
-    } else {
-      return res.json({ exists: false });
-    }
-  });
+  const stmt = db.prepare('SELECT * FROM craftnode WHERE text = ?');
+  const row = stmt.get([text]);
+
+  if (row) {
+    return res.json({ exists: true, result: row });
+  } else {
+    return res.json({ exists: false });
+  }
 });
 
 // API endpoint to store a combination
 app.post('/api/store-combination', (req, res) => {
   const { str1, str2, craftNode } = req.body;
-  const {  id, text, emoji, tags, previewUrl, modelUrl } = craftNode;
+  const { id, text, emoji, tags, previewUrl, modelUrl } = craftNode;
 
   // Check if the craftNode already exists
-  db.get('SELECT id FROM craftnode WHERE text = ?', [text], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  const craftnodeStmt = db.prepare('SELECT id FROM craftnode WHERE text = ?');
+  const row = craftnodeStmt.get([text]);
 
-    if (row) {
-      // If the craftNode exists, use its id
-      const cnId = row.id;
-      db.run('INSERT INTO combinations (str1, str2, cnId) VALUES (?, ?, ?)', [str1, str2, cnId], function(err) {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        return res.status(201).json({ message: 'Combination stored with existing craftNode' });
-      });
-    } else {
-      db.run('INSERT INTO craftnode (id, text, emoji, tags, modelUrl, previewUrl) VALUES (?, ?, ?, ?, ?, ?)', [id, text, emoji, tags, modelUrl, previewUrl], function(err) {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
-        db.run('INSERT INTO combinations (str1, str2, cnId) VALUES (?, ?, ?)', [str1, str2, id], function(err) {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
-          return res.status(201).json({ message: 'Combination stored with new craftNode' });
-        });
-      });
-    }
-  });
+  if (row) {
+    // If the craftNode exists, use its id
+    const cnId = row.id;
+    const combinationsStmt = db.prepare('INSERT INTO combinations (str1, str2, cnId) VALUES (?, ?, ?)');
+    combinationsStmt.run([str1, str2, cnId]);
+    return res.status(201).json({ message: 'Combination stored with existing craftNode' });
+  } else {
+    const craftnodeStmt = db.prepare('INSERT INTO craftnode (id, text, emoji, tags, modelUrl, previewUrl) VALUES (?, ?, ?, ?, ?, ?)');
+    craftnodeStmt.run([id, text, emoji, tags, modelUrl, previewUrl]);
+
+    const combinationsStmt = db.prepare('INSERT INTO combinations (str1, str2, cnId) VALUES (?, ?, ?)');
+    combinationsStmt.run([str1, str2, id]);
+    return res.status(201).json({ message: 'Combination stored with new craftNode' });
+  }
 });
 
 
