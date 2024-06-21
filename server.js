@@ -153,6 +153,6 @@ app.post('/api/store-combination', (req, res) => {
 
 // Start the server
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`API server running on 0.0.0.0:${port}`);
 });
