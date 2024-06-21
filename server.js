@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const morgan = require('morgan');
-const sqlite3 = require('sqlite3').verbose();
+const sqlite3 = require('better-sqlite3');
 require('dotenv').config();
 
 const app = express();
